@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบวิเคราะห์ข้อมูลหัวมันสำปะหลัง Real-time | Power BI</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          'thai': ['Sarabun', 'sans-serif'],
+          'mono': ['IBM Plex Mono', 'monospace'],
+        },
+        colors: {
+          forest: {
+            950: '#050e07',
+            900: '#0a1a0d',
+            800: '#0f2814',
+            700: '#173d1f',
+            600: '#1e5229',
+            500: '#276b35',
+            400: '#3a9950',
+            300: '#5bbf72',
+            200: '#8dd9a0',
+            100: '#c2edcc',
+          },
+          lime: {
+            400: '#b5e853',
+            300: '#c8ef7a',
+          },
+          amber: {
+            custom: '#e89820',
+          }
+        },
+        animation: {
+          'fade-up': 'fadeUp 0.7s ease forwards',
+          'fade-in': 'fadeIn 0.5s ease forwards',
+          'pulse-slow': 'pulse 4s ease-in-out infinite',
+          'float': 'float 6s ease-in-out infinite',
+          'scan': 'scan 3s linear infinite',
+        },
+        keyframes: {
+          fadeUp: { from: { opacity: 0, transform: 'translateY(30px)' }, to: { opacity: 1, transform: 'translateY(0)' } },
+          fadeIn: { from: { opacity: 0 }, to: { opacity: 1 } },
+          float: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+          scan: { '0%': { transform: 'translateY(-100%)' }, '100%': { transform: 'translateY(400%)' } },
+        }
+      }
+    }
+  }
+</script>
+<style>
+  * { scroll-behavior: smooth; }
+  body { font-family: 'Sarabun', sans-serif; }
+
+  .grid-bg {
+    background-image:
+      linear-gradient(rgba(91,191,114,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(91,191,114,0.05) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .glow-green { box-shadow: 0 0 30px rgba(91,191,114,0.15), 0 0 60px rgba(91,191,114,0.05); }
+  .glow-text { text-shadow: 0 0 20px rgba(181,232,83,0.4); }
+  .glow-border { box-shadow: 0 0 0 1px rgba(91,191,114,0.3), inset 0 0 20px rgba(91,191,114,0.03); }
+
+  .section-reveal {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .section-reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /* Animated gradient border */
+  .gradient-border {
+    position: relative;
+    background: linear-gradient(135deg, #0f2814, #173d1f);
+  }
+  .gradient-border::before {
+    content: '';
+    position: absolute; inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(91,191,114,0.5), rgba(181,232,83,0.2), rgba(91,191,114,0.1));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+  }
+
+  /* Nav pill active */
+  .nav-pill.active {
+    background: rgba(181,232,83,0.15);
+    color: #b5e853;
+    border-color: rgba(181,232,83,0.35);
+  }
+
+  /* iframe container */
+  .pbi-wrapper {
+    position: relative;
+    overflow: hidden;
+    border-radius: 12px;
+  }
+  .pbi-wrapper::before {
+    content: '';
+    position: absolute; top: 0; left: -100%;
+    width: 60%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(181,232,83,0.06), transparent);
+    animation: shimmer 3s ease-in-out infinite;
+    pointer-events: none; z-index: 10;
+  }
+  @keyframes shimmer {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(15,40,20,0.9), rgba(23,61,31,0.7));
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(91,191,114,0.15);
+  }
+  .stat-card::after {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #5bbf72, #b5e853, transparent);
+  }
+
+  .step-card {
+    transition: transform 0.3s ease, border-color 0.3s ease;
+  }
+  .step-card:hover {
+    transform: translateX(6px);
+    border-color: rgba(91,191,114,0.5);
+  }
+
+  .problem-card {
+    transition: transform 0.3s ease, border-color 0.3s ease;
+  }
+  .problem-card:hover {
+    transform: translateY(-5px);
+    border-color: rgba(239,68,68,0.4);
+  }
+  .problem-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, #ef4444, transparent);
+  }
+
+  .branch-card { transition: transform 0.3s ease; }
+  .branch-card:hover { transform: scale(1.02); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: #050e07; }
+  ::-webkit-scrollbar-thumb { background: rgba(91,191,114,0.3); border-radius: 10px; }
+</style>
+</head>
+
+<body class="bg-forest-950 text-gray-100 font-thai overflow-x-hidden">
+
+<!-- ─────────────── FIXED NAV ─────────────── -->
+<nav class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-8 py-3"
+     style="background:rgba(5,14,7,0.85); backdrop-filter:blur(14px); border-bottom:1px solid rgba(91,191,114,0.1);">
+  <div class="flex items-center gap-3">
+    <span class="text-lime-400 text-lg">🌿</span>
+    <span class="font-mono text-xs tracking-widest text-forest-300 uppercase">Cassava · Real-time Analytics</span>
+  </div>
+  <div class="hidden md:flex items-center gap-2">
+    <a href="#hero"     class="nav-pill px-3 py-1 rounded-full text-xs border border-transparent text-forest-300 hover:text-lime-400 transition-all duration-300 font-mono tracking-wider">หน้าปก</a>
+    <a href="#problem"  class="nav-pill px-3 py-1 rounded-full text-xs border border-transparent text-forest-300 hover:text-lime-400 transition-all duration-300 font-mono tracking-wider">ปัญหา</a>
+    <a href="#method"   class="nav-pill px-3 py-1 rounded-full text-xs border border-transparent text-forest-300 hover:text-lime-400 transition-all duration-300 font-mono tracking-wider">วิธีการ</a>
+    <a href="#analysis" class="nav-pill px-3 py-1 rounded-full text-xs border border-transparent text-forest-300 hover:text-lime-400 transition-all duration-300 font-mono tracking-wider">ผลวิเคราะห์</a>
+    <a href="#result"   class="nav-pill px-3 py-1 rounded-full text-xs border border-transparent text-forest-300 hover:text-lime-400 transition-all duration-300 font-mono tracking-wider">สรุปผล</a>
+  </div>
+</nav>
+
+<!-- ─────────────── HERO ─────────────── -->
+<section id="hero" class="relative min-h-screen flex flex-col items-center justify-center text-center px-6 pt-20 grid-bg overflow-hidden">
+  <!-- Radial glows -->
+  <div class="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full"
+       style="background:radial-gradient(circle, rgba(39,107,53,0.2) 0%, transparent 70%); pointer-events:none;"></div>
+
+  <!-- Floating rings -->
+  <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full border border-forest-700 opacity-30 animate-pulse-slow pointer-events-none"></div>
+  <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] rounded-full border border-forest-600 opacity-20 animate-pulse-slow pointer-events-none" style="animation-delay:1s;"></div>
+
+  <div class="relative z-10 max-w-4xl mx-auto">
+    <!-- Badge -->
+    <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 text-xs font-mono tracking-widest mb-8 animate-fade-in">
+      <span class="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse"></span>
+      สหกิจศึกษา · วิทยาศาสตรบัณฑิต (วิทยาการข้อมูล) · ม.ราชภัฏสกลนคร · พ.ศ. 2568
+    </div>
+
+    <!-- Title -->
+    <h1 class="text-4xl md:text-6xl font-extrabold leading-tight mb-4 animate-fade-up" style="animation-delay:0.1s;">
+      ระบบวิเคราะห์ข้อมูล<br>
+      <span class="text-lime-400 glow-text">หัวมันสำปะหลัง</span><br>
+      <span class="text-forest-300">แบบ Real-time</span>
+    </h1>
+
+    <p class="text-forest-300 text-base md:text-lg font-light leading-relaxed max-w-xl mx-auto mb-10 animate-fade-up" style="animation-delay:0.2s;">
+      ด้วย <span class="text-lime-400 font-semibold">Power BI</span> ·
+      บริษัท พรีเมียร์ควอลิตี้สตาร์ช (2012) จำกัด
+    </p>
+
+    <!-- Meta cards -->
+    <div class="flex flex-wrap justify-center gap-4 animate-fade-up" style="animation-delay:0.3s;">
+      <div class="gradient-border rounded-xl px-5 py-3 text-left">
+        <div class="font-mono text-xs text-forest-400 tracking-widest mb-1">ผู้จัดทำ</div>
+        <div class="font-semibold text-sm text-gray-100">นายทศพล จันทภูบาล</div>
+      </div>
+      <div class="gradient-border rounded-xl px-5 py-3 text-left">
+        <div class="font-mono text-xs text-forest-400 tracking-widest mb-1">รหัสนักศึกษา</div>
+        <div class="font-semibold text-sm text-gray-100 font-mono">65102119105</div>
+      </div>
+      <div class="gradient-border rounded-xl px-5 py-3 text-left">
+        <div class="font-mono text-xs text-forest-400 tracking-widest mb-1">เครื่องมือหลัก</div>
+        <div class="font-semibold text-sm text-lime-400">Power BI + Automate + Query</div>
+      </div>
+      <div class="gradient-border rounded-xl px-5 py-3 text-left">
+        <div class="font-mono text-xs text-forest-400 tracking-widest mb-1">ช่วงข้อมูล</div>
+        <div class="font-semibold text-sm text-gray-100">ม.ค. – ต.ค. 2568</div>
+      </div>
+    </div>
+
+    <!-- Scroll hint -->
+    <div class="mt-16 flex flex-col items-center gap-2 text-forest-500 animate-float">
+      <span class="text-xs font-mono tracking-widest">SCROLL</span>
+      <div class="w-px h-8 bg-gradient-to-b from-forest-500 to-transparent"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── PROBLEM ─────────────── -->
+<section id="problem" class="py-24 px-6 md:px-16 max-w-6xl mx-auto section-reveal">
+  <div class="mb-14">
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-8 h-px bg-red-500/60"></div>
+      <span class="font-mono text-xs tracking-widest text-red-400 uppercase">01 · ปัญหาที่พบ</span>
+    </div>
+    <h2 class="text-3xl md:text-4xl font-extrabold">
+      ปัญหาจากระบบ <span class="text-red-400">Excel</span> เดิม
+    </h2>
+    <p class="text-forest-300 mt-3 max-w-xl leading-relaxed">
+      บริษัทใช้ Excel จัดเก็บข้อมูลวัตถุดิบ แต่พบข้อจำกัดหลายด้าน ส่งผลต่อกระบวนการติดตามและการวางแผนการผลิต
+    </p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+    <div class="problem-card relative rounded-2xl p-6 bg-forest-900/60 border border-red-900/40 overflow-hidden">
+      <div class="text-3xl mb-4">⏳</div>
+      <h3 class="font-bold text-red-300 mb-2">ข้อมูลล่าช้า</h3>
+      <p class="text-sm text-forest-300 leading-relaxed">ไม่สามารถแสดงข้อมูล Real-time ได้ ผู้ปฏิบัติงานตรวจสอบสถานะวัตถุดิบไม่ทันเวลา</p>
+    </div>
+    <div class="problem-card relative rounded-2xl p-6 bg-forest-900/60 border border-red-900/40 overflow-hidden">
+      <div class="text-3xl mb-4">📂</div>
+      <h3 class="font-bold text-red-300 mb-2">ข้อมูลกระจัดกระจาย</h3>
+      <p class="text-sm text-forest-300 leading-relaxed">แยกเป็นหลายไฟล์หลาย Sheet โครงสร้างไม่เป็นระบบเดียวกัน ต้องเสียเวลารวบรวมทุกครั้ง</p>
+    </div>
+    <div class="problem-card relative rounded-2xl p-6 bg-forest-900/60 border border-red-900/40 overflow-hidden">
+      <div class="text-3xl mb-4">⚠️</div>
+      <h3 class="font-bold text-red-300 mb-2">เกิดความผิดพลาด</h3>
+      <p class="text-sm text-forest-300 leading-relaxed">กรอกข้อมูลด้วยมือทำให้เกิดข้อมูลซ้ำซ้อน และโอกาสเกิด Human Error สูง</p>
+    </div>
+    <div class="problem-card relative rounded-2xl p-6 bg-forest-900/60 border border-red-900/40 overflow-hidden">
+      <div class="text-3xl mb-4">🚫</div>
+      <h3 class="font-bold text-red-300 mb-2">ตัดสินใจไม่ทันเวลา</h3>
+      <p class="text-sm text-forest-300 leading-relaxed">ผู้บริหารขาดข้อมูล ณ ปัจจุบัน โดยเฉพาะในช่วงที่ต้องวางแผนการผลิตเร่งด่วน</p>
+    </div>
+  </div>
+
+  <!-- Arrow + result -->
+  <div class="mt-8 flex flex-col items-start gap-4">
+    <div class="text-red-500/40 text-3xl pl-2">↓</div>
+    <div class="rounded-2xl px-6 py-5 bg-red-950/30 border border-red-800/30 max-w-2xl">
+      <p class="text-sm text-gray-300 leading-relaxed">
+        <span class="font-bold text-red-300">ผลกระทบ:</span> กระบวนการติดตามปริมาณหัวมันสำปะหลังและการวางแผนการผลิตไม่มีประสิทธิภาพ จำเป็นต้องมีระบบ Dashboard ที่แสดงผลได้แบบ Real-time
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── OBJECTIVE + METHOD ─────────────── -->
+<section id="method" class="py-24 px-6 md:px-16 section-reveal" style="background: linear-gradient(180deg, transparent, rgba(15,40,20,0.4), transparent);">
+  <div class="max-w-6xl mx-auto">
+
+    <!-- Objective -->
+    <div class="mb-16">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-px bg-lime-400/60"></div>
+        <span class="font-mono text-xs tracking-widest text-lime-400 uppercase">02 · วัตถุประสงค์</span>
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold mb-8">เป้าหมาย<span class="text-lime-400">ของโครงการ</span></h2>
+
+      <div class="gradient-border rounded-2xl p-7 max-w-2xl relative overflow-hidden">
+        <div class="absolute top-2 left-5 text-7xl text-lime-400/10 font-serif leading-none select-none">"</div>
+        <p class="text-base leading-relaxed text-gray-200 relative z-10">
+          พัฒนา <span class="text-lime-400 font-bold">Dashboard</span> สำหรับแสดงผลปริมาณวัตถุดิบหัวมันสำปะหลัง
+          ให้ตรวจสอบได้สะดวก รวดเร็ว และ<span class="text-lime-400 font-bold">ติดตามสถานะแบบเกือบ Real-time</span>
+          ผ่านการรีเฟรชข้อมูลอัตโนมัติทุก <span class="font-mono text-lime-400 font-bold">1 นาที</span> ด้วย Power Automate
+          · บริษัท พรีเมียร์ควอลิตี้สตาร์ช (2012) จำกัด
+        </p>
+      </div>
+    </div>
+
+    <!-- ETL Steps -->
+    <div>
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-8 h-px bg-yellow-400/60"></div>
+        <span class="font-mono text-xs tracking-widest text-yellow-400 uppercase">03 · วิธีดำเนินการ · ETL Process</span>
+      </div>
+      <h2 class="text-3xl md:text-4xl font-extrabold mb-8">กระบวนการ <span class="text-yellow-400">ETL + Power BI</span></h2>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mb-10">
+        <div class="step-card rounded-2xl p-5 bg-forest-900/50 border border-forest-700/50">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">STEP 01 · EXTRACT</span>
+          </div>
+          <h3 class="font-bold text-gray-100 mb-2">ดึงข้อมูลจาก Excel</h3>
+          <p class="text-sm text-forest-300 leading-relaxed">เชื่อมต่อไฟล์ Excel รายเดือน (ม.ค.–ต.ค. 2568) เข้าสู่ Power BI โดยเลือก Data Source เป็น Excel</p>
+        </div>
+        <div class="step-card rounded-2xl p-5 bg-forest-900/50 border border-forest-700/50">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">STEP 02 · TRANSFORM</span>
+          </div>
+          <h3 class="font-bold text-gray-100 mb-2">แปลงข้อมูลด้วย Power Query</h3>
+          <p class="text-sm text-forest-300 leading-relaxed">Unpivot ตาราง Cross-Tab → แถวปกติ, ล้างข้อมูล, จัดโครงสร้างคอลัมน์ใหม่ให้พร้อมวิเคราะห์</p>
+        </div>
+        <div class="step-card rounded-2xl p-5 bg-forest-900/50 border border-forest-700/50">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-xs text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full border border-yellow-400/20">STEP 03 · LOAD</span>
+          </div>
+          <h3 class="font-bold text-gray-100 mb-2">โหลดเข้า Data Model</h3>
+          <p class="text-sm text-forest-300 leading-relaxed">Power BI โหลดข้อมูลเข้า Data Model แล้วสร้าง Visualization กราฟเส้น กราฟวงกลม และตารางสรุป</p>
+        </div>
+        <div class="step-card rounded-2xl p-5 bg-forest-900/50 border border-forest-700/50">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="font-mono text-xs text-lime-400 bg-lime-400/10 px-2 py-0.5 rounded-full border border-lime-400/20">STEP 04 · AUTOMATE</span>
+          </div>
+          <h3 class="font-bold text-gray-100 mb-2">รีเฟรชอัตโนมัติ</h3>
+          <p class="text-sm text-forest-300 leading-relaxed">ตั้ง Flow ใน Power Automate แบบ Recurrence Trigger ทุก 1 นาที → Dashboard อัปเดตข้อมูลตลอดเวลา</p>
+        </div>
+      </div>
+
+      <!-- Tools row -->
+      <div class="flex flex-wrap gap-3">
+        <div class="flex items-center gap-2.5 rounded-full px-4 py-2 bg-forest-800/60 border border-forest-600/40 hover:border-lime-400/30 transition-colors">
+          <span class="text-lg">📊</span>
+          <div><div class="text-xs font-bold text-gray-200">Power BI</div><div class="text-xs text-forest-400">Dashboard & Visualization</div></div>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-full px-4 py-2 bg-forest-800/60 border border-forest-600/40 hover:border-lime-400/30 transition-colors">
+          <span class="text-lg">🔄</span>
+          <div><div class="text-xs font-bold text-gray-200">Power Query</div><div class="text-xs text-forest-400">ETL & Data Transformation</div></div>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-full px-4 py-2 bg-forest-800/60 border border-forest-600/40 hover:border-lime-400/30 transition-colors">
+          <span class="text-lg">⚡</span>
+          <div><div class="text-xs font-bold text-gray-200">Power Automate</div><div class="text-xs text-forest-400">Automated Cloud Flow</div></div>
+        </div>
+        <div class="flex items-center gap-2.5 rounded-full px-4 py-2 bg-forest-800/60 border border-forest-600/40 hover:border-lime-400/30 transition-colors">
+          <span class="text-lg">📐</span>
+          <div><div class="text-xs font-bold text-gray-200">DAX</div><div class="text-xs text-forest-400">Data Analysis Expressions</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────── POWER BI ANALYSIS ─────────────── -->
+<section id="analysis" class="py-24 px-6 md:px-16 section-reveal">
+  <div class="max-w-6xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-8 h-px bg-forest-300/60"></div>
+      <span class="font-mono text-xs tracking-widest text-forest-300 uppercase">04 · ผลการวิเคราะห์ข้อมูล</span>
+    </div>
+    <h2 class="text-3xl md:text-4xl font-extrabold mb-3">
+      Dashboard <span class="text-lime-400">Real-time</span>
+    </h2>
+    <p class="text-forest-300 mb-12 max-w-xl leading-relaxed">
+      แสดงข้อมูลปริมาณหัวมันสำปะหลังและเปอร์เซ็นต์เชื้อแป้งทั้ง 3 สาขา
+      แบบรายวันและรายเดือน อัปเดตทุก 1 นาทีด้วย Power Automate
+    </p>
+
+    <!-- Branch stats -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-12">
+      <div class="stat-card rounded-2xl p-5 border border-forest-700/40">
+        <div class="flex justify-between items-start mb-3">
+          <span class="font-mono text-xs text-forest-400 tracking-widest">MUK · สาขา 01</span>
+          <span class="w-2 h-2 rounded-full bg-lime-400 animate-pulse-slow"></span>
+        </div>
+        <div class="text-2xl font-extrabold font-mono text-lime-400 mb-1">206,718</div>
+        <div class="text-xs text-forest-400 mb-3">ตัน · ยอดรวมรับซื้อ</div>
+        <div class="font-bold text-gray-200 text-sm">สาขามุกดาหาร</div>
+        <div class="text-xs text-forest-400 mt-1 leading-relaxed">วิเคราะห์แนวโน้ม Trend รายวัน และเปรียบเทียบคุณภาพเชื้อแป้งรายเดือน</div>
+      </div>
+      <div class="stat-card rounded-2xl p-5 border border-forest-700/40">
+        <div class="flex justify-between items-start mb-3">
+          <span class="font-mono text-xs text-forest-400 tracking-widest">SKN · สาขา 02</span>
+          <span class="w-2 h-2 rounded-full bg-lime-400 animate-pulse-slow" style="animation-delay:0.5s;"></span>
+        </div>
+        <div class="text-2xl font-extrabold font-mono text-lime-400 mb-1">216,738</div>
+        <div class="text-xs text-forest-400 mb-3">ตัน · ยอดรวมรับซื้อ</div>
+        <div class="font-bold text-gray-200 text-sm">สาขาสกลนคร</div>
+        <div class="text-xs text-forest-400 mt-1 leading-relaxed">ผู้บริหารสาขาตรวจสอบ % แป้งรายวันได้ทันที รองรับการตัดสินใจ</div>
+      </div>
+      <div class="stat-card rounded-2xl p-5 border border-forest-700/40">
+        <div class="flex justify-between items-start mb-3">
+          <span class="font-mono text-xs text-forest-400 tracking-widest">KAL · สาขา 03</span>
+          <span class="w-2 h-2 rounded-full bg-lime-400 animate-pulse-slow" style="animation-delay:1s;"></span>
+        </div>
+        <div class="text-2xl font-extrabold font-mono text-lime-400 mb-1">130,002</div>
+        <div class="text-xs text-forest-400 mb-3">ตัน · ยอดรวมรับซื้อ</div>
+        <div class="font-bold text-gray-200 text-sm">สาขากาฬสินธุ์</div>
+        <div class="text-xs text-forest-400 mt-1 leading-relaxed">วิเคราะห์ Starch Stability รายวัน ตรวจสอบความสม่ำเสมอของคุณภาพ</div>
+      </div>
+    </div>
+
+    <!-- Total stat bar -->
+    <div class="rounded-2xl p-4 mb-12 bg-forest-900/40 border border-forest-700/30 flex flex-wrap items-center gap-4 max-w-3xl">
+      <div class="font-mono text-xs text-forest-400 tracking-widest">ภาพรวมรวม 3 สาขา ·</div>
+      <div class="text-xl font-extrabold font-mono text-lime-400">553,458 <span class="text-sm font-normal text-forest-400">ตัน</span></div>
+      <div class="h-4 w-px bg-forest-700"></div>
+      <div class="text-xs text-forest-300">กราฟวงกลม · กราฟเส้น · ตารางสรุป · ตัวกรองแบบ Real-time</div>
+    </div>
+
+    <!-- ─── POWER BI IFRAME (CENTER) ─── -->
+    <div class="flex flex-col items-center">
+      <div class="flex items-center gap-3 mb-6">
+        <span class="w-2 h-2 rounded-full bg-lime-400 animate-pulse"></span>
+        <span class="font-mono text-xs tracking-widest text-lime-400 uppercase">Live Dashboard · อัปเดตทุก 1 นาที</span>
+        <span class="w-2 h-2 rounded-full bg-lime-400 animate-pulse" style="animation-delay:0.5s;"></span>
+      </div>
+
+      <div class="pbi-wrapper w-full max-w-4xl glow-green rounded-2xl"
+           style="border: 1px solid rgba(91,191,114,0.25); box-shadow: 0 0 40px rgba(91,191,114,0.1), 0 0 80px rgba(91,191,114,0.04);">
+        <!-- Top bar decoration -->
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-forest-700/40"
+             style="background:rgba(10,26,13,0.9);">
+          <div class="flex items-center gap-2">
+            <span class="text-sm">📊</span>
+            <span class="font-mono text-xs text-forest-400 tracking-wide">ปริมาณหัวมันสำปะหลัง ตัน FN3</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-red-500/60"></span>
+            <span class="w-2 h-2 rounded-full bg-yellow-500/60"></span>
+            <span class="w-2 h-2 rounded-full bg-lime-500/60"></span>
+          </div>
+        </div>
+        <!-- iframe -->
+        <div class="w-full" style="background:#0a1a0d;">
+          <iframe
+            title="ปริมาณหัวมันสำปะหลัง ตัน FN3"
+            src="https://app.powerbi.com/view?r=eyJrIjoiNzVkZjEzNzMtYzEwOS00YmY2LWJmODQtODU5YTM2YzliZmU4IiwidCI6Ijc1MDFjZDFhLTAwMzYtNGE1Yi1hZWEwLWFlMWJkZjJhNjRiNyIsImMiOjEwfQ%3D%3D"
+            frameborder="0"
+            allowfullscreen="true"
+            class="w-full"
+            style="height: clamp(320px, 50vw, 500px); display:block;"
+          ></iframe>
+        </div>
+        <!-- Bottom bar -->
+        <div class="flex items-center justify-between px-4 py-2 border-t border-forest-700/30"
+             style="background:rgba(10,26,13,0.9);">
+          <span class="font-mono text-xs text-forest-600">Powered by Microsoft Power BI</span>
+          <span class="font-mono text-xs text-forest-500">Premier Quality Starch (2012) Co., Ltd.</span>
+        </div>
+      </div>
+
+      <!-- Caption -->
+      <p class="text-forest-500 text-xs font-mono mt-4 text-center">
+        * คลิกที่กราฟเพื่อ Drill-down และกรองข้อมูลตามช่วงเวลาที่ต้องการ
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────────── RESULT ─────────────── -->
+<section id="result" class="py-24 px-6 md:px-16 section-reveal" style="background: linear-gradient(180deg, transparent, rgba(15,40,20,0.3), transparent);">
+  <div class="max-w-6xl mx-auto">
+
+    <div class="flex items-center gap-3 mb-4">
+      <div class="w-8 h-px bg-lime-400/60"></div>
+      <span class="font-mono text-xs tracking-widest text-lime-400 uppercase">05 · สรุปผลและความพึงพอใจ</span>
+    </div>
+    <h2 class="text-3xl md:text-4xl font-extrabold mb-12">
+      ผลประเมิน<span class="text-lime-400">ความพึงพอใจ</span>
+    </h2>
+
+    <div class="flex flex-col lg:flex-row gap-12 items-start">
+
+      <!-- Score circle -->
+      <div class="flex flex-col items-center gap-4 flex-shrink-0">
+        <div class="relative w-44 h-44">
+          <svg class="w-full h-full -rotate-90" viewBox="0 0 140 140">
+            <circle cx="70" cy="70" r="58" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/>
+            <circle cx="70" cy="70" r="58" fill="none" stroke="#b5e853" stroke-width="10"
+                    stroke-linecap="round"
+                    stroke-dasharray="364.4"
+                    stroke-dashoffset="43.7"
+                    style="filter:drop-shadow(0 0 8px #b5e853);"/>
+          </svg>
+          <div class="absolute inset-0 flex flex-col items-center justify-center">
+            <div class="text-3xl font-extrabold font-mono text-lime-400" style="text-shadow:0 0 16px rgba(181,232,83,0.5);">4.75</div>
+            <div class="text-xs text-forest-400 font-mono">จาก 5.00</div>
+            <div class="text-xs text-lime-400 mt-1 font-semibold tracking-wide">มากที่สุด</div>
+          </div>
+        </div>
+        <div class="text-center">
+          <div class="font-bold text-gray-200 text-sm">ผู้ตอบแบบสอบถาม</div>
+          <div class="font-mono text-lime-400 text-lg font-bold">4 คน</div>
+          <div class="text-xs text-forest-400">จัดหาวัตถุดิบ · IT · ฝ่ายผลิต</div>
+        </div>
+      </div>
+
+      <!-- Score items -->
+      <div class="flex-1 flex flex-col gap-3">
+        <div class="flex items-center gap-4 rounded-xl px-5 py-3.5 bg-forest-900/50 border border-forest-700/30 hover:border-lime-400/25 transition-colors">
+          <div class="flex-1 text-sm text-gray-300">เข้าถึงเมนูและตัวกรองข้อมูลได้ง่าย</div>
+          <div class="flex items-center gap-3">
+            <div class="w-24 h-1.5 rounded-full bg-forest-800 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-forest-400 to-lime-400 rounded-full" style="width:95%"></div>
+            </div>
+            <span class="font-mono text-sm font-bold text-lime-400 w-8">4.75</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 rounded-xl px-5 py-3.5 bg-forest-900/50 border border-forest-700/30 hover:border-lime-400/25 transition-colors">
+          <div class="flex-1 text-sm text-gray-300">กราฟ Trend Value ช่วยให้เข้าใจข้อมูลได้ทันที</div>
+          <div class="flex items-center gap-3">
+            <div class="w-24 h-1.5 rounded-full bg-forest-800 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-forest-400 to-lime-400 rounded-full" style="width:95%"></div>
+            </div>
+            <span class="font-mono text-sm font-bold text-lime-400 w-8">4.75</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 rounded-xl px-5 py-3.5 bg-forest-900/50 border border-forest-700/30 hover:border-lime-400/25 transition-colors">
+          <div class="flex-1 text-sm text-gray-300">ระบบอัปเดตข้อมูลแบบ Real-time ทุก 1 นาที</div>
+          <div class="flex items-center gap-3">
+            <div class="w-24 h-1.5 rounded-full bg-forest-800 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-forest-400 to-lime-400 rounded-full" style="width:95%"></div>
+            </div>
+            <span class="font-mono text-sm font-bold text-lime-400 w-8">4.75</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 rounded-xl px-5 py-3.5 bg-forest-900/50 border border-forest-700/30 hover:border-lime-400/25 transition-colors">
+          <div class="flex-1 text-sm text-gray-300">ลดเวลาจัดการข้อมูลเมื่อเทียบกับ Excel เดิม</div>
+          <div class="flex items-center gap-3">
+            <div class="w-24 h-1.5 rounded-full bg-forest-800 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-forest-400 to-lime-400 rounded-full" style="width:95%"></div>
+            </div>
+            <span class="font-mono text-sm font-bold text-lime-400 w-8">4.75</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-4 rounded-xl px-5 py-3.5 bg-forest-900/50 border border-forest-700/30 hover:border-lime-400/25 transition-colors">
+          <div class="flex-1 text-sm text-gray-300">ข้อมูลสรุปช่วยสนับสนุนการตัดสินใจประจำวัน</div>
+          <div class="flex items-center gap-3">
+            <div class="w-24 h-1.5 rounded-full bg-forest-800 overflow-hidden">
+              <div class="h-full bg-gradient-to-r from-forest-400 to-lime-400 rounded-full" style="width:95%"></div>
+            </div>
+            <span class="font-mono text-sm font-bold text-lime-400 w-8">4.75</span>
+          </div>
+        </div>
+
+        <!-- Suggestion box -->
+        <div class="mt-2 rounded-2xl p-5 bg-yellow-900/20 border border-yellow-700/30 flex gap-3">
+          <span class="text-xl flex-shrink-0">💬</span>
+          <div>
+            <div class="font-mono text-xs text-yellow-400 tracking-widest mb-1.5">ข้อเสนอแนะจากผู้ใช้งาน</div>
+            <p class="text-sm text-gray-300 leading-relaxed italic">
+              "เพิ่มเปอร์เซ็นต์เชื้อแป้ง จะมีข้อเปรียบเทียบได้มากขึ้น ตอนนี้ถือว่าดีมากๆ ครับ"
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary conclusion -->
+    <div class="mt-14 rounded-2xl p-7 bg-forest-900/40 border border-forest-700/30 max-w-3xl">
+      <div class="font-mono text-xs text-forest-400 tracking-widest mb-3 uppercase">สรุปผลการดำเนินการ</div>
+      <p class="text-sm text-gray-300 leading-relaxed">
+        ระบบ Dashboard ที่พัฒนาขึ้นสามารถแสดงข้อมูลปริมาณหัวมันสำปะหลัง
+        <span class="text-lime-400 font-semibold">รายวันและรายเดือน</span> พร้อมตัวกรองยืดหยุ่น
+        ช่วย<span class="text-lime-400 font-semibold">ลดเวลาจัดการข้อมูล</span>
+        <span class="text-lime-400 font-semibold">ลดความผิดพลาด</span> จากการกรอกด้วยมือ
+        และ<span class="text-lime-400 font-semibold">เพิ่มความแม่นยำ</span>ในการติดตามวัตถุดิบ
+        พร้อมสนับสนุนการตัดสินใจในกระบวนการผลิตได้อย่างทันเวลา
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────────── FOOTER ─────────────── -->
+<footer class="py-10 px-8 border-t border-forest-800/60 text-center">
+  <div class="font-mono text-xs text-forest-600 space-y-1">
+    <div>ระบบวิเคราะห์ข้อมูลหัวมันสำปะหลังแบบ Real-time ด้วย Power BI</div>
+    <div>บริษัท พรีเมียร์ควอลิตี้สตาร์ช (2012) จำกัด · นายทศพล จันทภูบาล · พ.ศ. 2568</div>
+    <div class="text-forest-800">คณะวิทยาศาสตร์และเทคโนโลยี มหาวิทยาลัยราชภัฏสกลนคร</div>
+  </div>
+</footer>
+
+<script>
+  // Scroll reveal
+  const reveals = document.querySelectorAll('.section-reveal');
+  const revealObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+  }, { threshold: 0.12 });
+  reveals.forEach(r => revealObs.observe(r));
+
+  // Active nav pill
+  const sections = document.querySelectorAll('section[id]');
+  const pills = document.querySelectorAll('.nav-pill');
+  const navObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        pills.forEach(p => p.classList.remove('active'));
+        const active = document.querySelector(`.nav-pill[href="#${e.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { threshold: 0.4 });
+  sections.forEach(s => navObs.observe(s));
+</script>
+
+</body>
+</html>
